@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+private/
+node_modules/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

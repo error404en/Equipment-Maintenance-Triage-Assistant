@@ -79,7 +79,7 @@ export default function App() {
       ...(analysisData.rule_results || []).map((r: any) => ({
         kind: r.status === 'ok' ? 'observation' : 'possible_cause',
         source: 'rules',
-        description: `[${r.sensor}] ${r.reason}`,
+        description: `[${r.rule_id}] ${r.reason}`,
         citations: []
       })),
       ...(analysisData.ai_findings || []).map((f: any) => ({
@@ -235,7 +235,7 @@ export default function App() {
                       title={r.reason}
                       warning={r.status !== 'ok'}
                     >
-                      <p><b>Rule</b> — {r.sensor}</p>
+                      <p><b>Rule</b> — {r.rule_id}</p>
                     </TriageRecord>
                   ))}
 

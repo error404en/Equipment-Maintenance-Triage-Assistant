@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.models import IssueReport, ReportEvent
+from app.models import Equipment, IssueReport, ReportEvent
 from app.rules import (
     RuleStatus,
     evaluate_coolant_condition,
@@ -9,12 +9,14 @@ from app.rules import (
 )
 
 
-def create_mock_report(description: str = "") -> IssueReport:
+def create_mock_report(description: str = "", equipment_type: str = "cnc") -> IssueReport:
+    equipment = Equipment(id=1, identifier="EQ-TEST", type=equipment_type)
     return IssueReport(
         id=1,
         equipment_id=1,
         reported_by="Tech",
         description=description,
+        equipment=equipment,
     )
 
 
@@ -124,11 +126,11 @@ def test_multiple_rules_execute_independently() -> None:
     event = create_mock_event(1, {"state": "rapid movement", "coolant_temperature": 10})
     results = evaluate_rules(report, [event])
     assert len(results) == 2
-    
+
     # Check spindle
     assert results[0].rule_id == "spindle_inspection"
     assert results[0].status == RuleStatus.WARN
-    
+
     # Check coolant (independent of spindle)
     assert results[1].rule_id == "coolant_condition"
     assert results[1].status == RuleStatus.WARN
@@ -138,11 +140,11 @@ def test_rule_evaluation_is_deterministic() -> None:
     # L. Rule evaluation is deterministic: same input -> same output
     report = create_mock_report("Spindle noise.")
     event = create_mock_event(1, {"state": "rapid movement", "coolant_temperature": 21})
-    
+
     results1 = evaluate_rules(report, [event])
     results2 = evaluate_rules(report, [event])
     results3 = evaluate_rules(report, [event])
-    
+
     assert results1 == results2
     assert results2 == results3
 
@@ -152,11 +154,11 @@ def test_evidence_attached_correctly() -> None:
     report = create_mock_report("Spindle noise is loud.")
     event = create_mock_event(1, {"coolant_temperature": 30})
     results = evaluate_rules(report, [event])
-    
+
     # Spindle inspection is OK, evidence should be empty
     assert results[0].rule_id == "spindle_inspection"
     assert results[0].evidence == []
-    
+
     # Coolant condition is WARN, evidence should contain the 30 value and event index 1
     assert results[1].rule_id == "coolant_condition"
     assert len(results[1].evidence) == 1
@@ -167,12 +169,23 @@ def test_evidence_attached_correctly() -> None:
 
 def test_ai_related_fields_not_used() -> None:
     # N. AI-related fields/models are NOT used to determine deterministic rule outcomes
-    # The models IssueReport and ReportEvent have no AI fields, ensuring AI findings 
-    # cannot affect this code path. 
+    # The models IssueReport and ReportEvent have no AI fields, ensuring AI findings
+    # cannot affect this code path.
     # We verify that evaluating rules relies purely on report and events.
     report = create_mock_report("Normal operation.")
     event = create_mock_event(1, {"coolant_temperature": 21})
-    
+
     # The signature strictly enforces separation from Finding / AI logic.
     results = evaluate_rules(report, [event])
     assert all(r.status == RuleStatus.OK for r in results)
+
+
+def test_unknown_equipment_handled_gracefully() -> None:
+    # Test that an unsupported/unknown equipment type produces no CNC rule results
+    report = create_mock_report("Spindle noise.", equipment_type="pump")
+    event = create_mock_event(1, {"state": "rapid movement", "coolant_temperature": 21})
+
+    results = evaluate_rules(report, [event])
+
+    # Since it's a pump, not CNC, it shouldn't evaluate CNC rules
+    assert len(results) == 0

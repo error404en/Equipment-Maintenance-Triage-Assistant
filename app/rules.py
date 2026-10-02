@@ -131,8 +131,17 @@ def evaluate_coolant_condition(report: IssueReport, events: list[ReportEvent]) -
 def evaluate_rules(report: IssueReport, events: list[ReportEvent]) -> list[RuleResult]:
     """
     Evaluate all deterministic rules against a report and its events.
+    Dispatches based on equipment type.
     """
-    return [
-        evaluate_spindle_inspection(report, events),
-        evaluate_coolant_condition(report, events),
-    ]
+    if not report.equipment:
+        return []
+
+    eq_type = report.equipment.type.lower()
+
+    if eq_type == "cnc":
+        return [
+            evaluate_spindle_inspection(report, events),
+            evaluate_coolant_condition(report, events),
+        ]
+
+    return []

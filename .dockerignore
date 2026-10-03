@@ -1,0 +1,28 @@
+# Exclude host-platform node_modules so npm install inside the Linux container
+# produces correct platform-specific native binaries (e.g. lightningcss, esbuild).
+**/node_modules
+
+# Python build artifacts and venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.venv/
+
+# Secrets — never bake into the image
+.env
+
+# Dev/test artefacts
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/dist
+
+# Playwright recordings
+.playwright-mcp/
+
+# Git
+.git/
+.github/
+
+# Private folder
+private/

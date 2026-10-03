@@ -53,47 +53,96 @@ def _setup_base_data(db_session: Session) -> tuple[Equipment, IssueReport]:
     return eq, report
 
 
-def test_create_work_order_success_and_audit(test_client: TestClient, db_session: Session) -> None:
+def test_create_draft_work_order_success_and_audit(test_client: TestClient, db_session: Session) -> None:
     _eq, report = _setup_base_data(db_session)
-    payload = {
-        "priority": 1,
-        "proposed_steps": "Fix it",
+    # The endpoint will call run_analysis which requires events.
+    import json
+
+    from app.main import get_llm_provider
+    from app.models import ReportEvent
+    from tests.test_ai import FakeLLM
+
+    event = ReportEvent(report_id=report.id, event_index=1, readings={"coolant_temperature": 20})
+    db_session.add(event)
+    db_session.commit()
+
+    valid_json = json.dumps({
         "findings": [
             {
                 "kind": "possible_cause",
-                "source": "ai",
-                "description": "Maybe bad motor",
-                "citations": []
+                "description": "Bearing failure",
+                "citations": [{"event_index": 1}]
             }
-        ]
-    }
-    response = test_client.post(f"/api/reports/{report.id}/work-orders", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "draft"
+        ],
+        "follow_up_questions": [
+            {"description": "Is the vibration constant?", "citations": [{"event_index": 1}]}
+        ],
+        "inspection_steps": [
+            {"description": "Check bearing", "citations": [{"event_index": 1}]}
+        ],
+        "priority_reason": {"description": "Noise implies wear.", "citations": [{"event_index": 1}]},
+        "proposed_priority": 2
+    })
 
-    wo_id = data["id"]
-    audit = db_session.query(AuditLog).filter(AuditLog.entity_type == "work_order", AuditLog.entity_id == wo_id).first()
-    assert audit is not None
-    assert audit.action == "created"
+    app.dependency_overrides[get_llm_provider] = lambda: FakeLLM(response_text=valid_json)
+    try:
+        response = test_client.post(f"/api/reports/{report.id}/draft-work-order")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "draft"
+        assert data["priority"] == 2
+
+        # Verify findings are created
+        from app.models import Finding
+        findings = db_session.query(Finding).filter(Finding.report_id == report.id).all()
+        assert len(findings) > 0
+        ai_findings = [f for f in findings if f.source == "ai"]
+        assert len(ai_findings) == 1
+        assert ai_findings[0].description == "Bearing failure"
+
+        wo_id = data["id"]
+        audit = db_session.query(AuditLog).filter(AuditLog.entity_type == "work_order", AuditLog.entity_id == wo_id).first()
+        assert audit is not None
+        assert audit.action == "created"
+        assert audit.actor == "system"
+
+        # Verify AI run is persisted
+        from app.models import AIRun
+        ai_run = db_session.query(AIRun).filter(AIRun.report_id == report.id).first()
+        assert ai_run is not None
+        assert ai_run.status == "ok"
+    finally:
+        app.dependency_overrides.clear()
 
 
-def test_create_work_order_validates_finding(test_client: TestClient, db_session: Session) -> None:
+def test_create_draft_work_order_ai_fails(test_client: TestClient, db_session: Session) -> None:
     _eq, report = _setup_base_data(db_session)
-    # Try to submit a confirmed finding from AI, which should fail
-    payload = {
-        "priority": 1,
-        "findings": [
-            {
-                "kind": "confirmed",
-                "source": "ai",
-                "description": "AI confirms it",
-                "citations": []
-            }
-        ]
-    }
-    response = test_client.post(f"/api/reports/{report.id}/work-orders", json=payload)
-    assert response.status_code == 422
+    from app.main import get_llm_provider
+    from app.models import ReportEvent
+    from tests.test_ai import FakeLLM
+
+    event = ReportEvent(report_id=report.id, event_index=1, readings={"coolant_temperature": 20})
+    db_session.add(event)
+    db_session.commit()
+
+    # Fail the AI
+    app.dependency_overrides[get_llm_provider] = lambda: FakeLLM(response_text="invalid json")
+    try:
+        response = test_client.post(f"/api/reports/{report.id}/draft-work-order")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "draft"
+
+        # Since AI failed, priority should be based on rules (0 in this case)
+        assert data["priority"] == 0
+
+        # Verify AI run is persisted as degraded
+        from app.models import AIRun
+        ai_run = db_session.query(AIRun).filter(AIRun.report_id == report.id).first()
+        assert ai_run is not None
+        assert ai_run.status == "degraded"
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_approve_work_order_concurrency(test_client: TestClient, db_session: Session) -> None:

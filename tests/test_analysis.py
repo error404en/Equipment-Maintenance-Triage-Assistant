@@ -103,6 +103,13 @@ def test_analyze_report_with_ai_provider(test_client: TestClient, db_session: Se
                 "citations": [{"event_index": 1}]
             }
         ],
+        "follow_up_questions": [
+            {"description": "Is the vibration constant?", "citations": [{"event_index": 1}]}
+        ],
+        "inspection_steps": [
+            {"description": "Check bearing", "citations": [{"event_index": 1}]}
+        ],
+        "priority_reason": {"description": "Noise implies wear.", "citations": [{"event_index": 1}]},
         "proposed_priority": 2
     })
 
@@ -137,6 +144,9 @@ def test_analyze_report_ai_cannot_lower_priority(test_client: TestClient, db_ses
     # Rule priority is 2. AI proposes 0.
     valid_json = json.dumps({
         "findings": [],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "none", "citations": [{"event_index": 1}]},
         "proposed_priority": 0
     })
 

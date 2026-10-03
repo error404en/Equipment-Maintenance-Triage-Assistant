@@ -3,7 +3,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.ai import AIFinding, AIStatus
+from app.ai import AICitedItem, AIFinding, AIStatus
 from app.rules import RuleResult
 
 
@@ -14,6 +14,9 @@ class AnalysisResponse(BaseModel):
     ai_status: AIStatus
     ai_error_code: str | None = None
     ai_findings: list[AIFinding]
+    ai_questions: list[AICitedItem] = Field(default_factory=list)
+    ai_steps: list[AICitedItem] = Field(default_factory=list)
+    ai_priority_reason: AICitedItem | None = None
     final_priority: int
 
 

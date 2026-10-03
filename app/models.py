@@ -1,13 +1,16 @@
 import datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -97,3 +100,19 @@ class AuditLog(Base):
     action = Column(String, nullable=False)
     entity_type = Column(String, nullable=False)
     entity_id = Column(Integer, nullable=False)
+
+class AIRun(Base):
+    __tablename__ = "ai_runs"
+
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, ForeignKey("issue_report.id"), nullable=False)
+    prompt_version = Column(String(50), nullable=False)
+    model = Column(String(100), nullable=False)
+    status = Column(String(50), nullable=False)
+    error_code = Column(String(100), nullable=True)
+    retrieved_chunk_ids = Column(JSON, nullable=False, default=list)
+    raw_output = Column(Text, nullable=True)
+    latency_ms = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    report = relationship("IssueReport")

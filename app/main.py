@@ -21,7 +21,6 @@ from app.schemas import (
     EquipmentResponse,
     IssueReportCreate,
     IssueReportDetailResponse,
-    WorkOrderCreate,
     WorkOrderHistory,
     WorkOrderReview,
 )
@@ -83,17 +82,18 @@ def analyze_report(
         report=report,
         events=events,
         retriever=global_retriever,
+        db=db,
         provider=llm_provider,
     )
 
 
-@app.post("/api/reports/{report_id}/work-orders", response_model=WorkOrderHistory)
-def create_work_order(
+@app.post("/api/reports/{report_id}/draft-work-order", response_model=WorkOrderHistory)
+def create_draft_work_order(
     report_id: int,
-    payload: WorkOrderCreate,
     db: Session = Depends(get_db),  # noqa: B008
+    llm_provider: LLMProvider | None = Depends(get_llm_provider),  # noqa: B008
 ) -> WorkOrderHistory:
-    report = db.query(IssueReport).filter(IssueReport.id == report_id).first()
+    report = db.query(IssueReport).options(joinedload(IssueReport.equipment)).filter(IssueReport.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -102,30 +102,56 @@ def create_work_order(
     if existing:
         raise HTTPException(status_code=409, detail="Work order already exists for this report")
 
-    # Create Findings
-    for f_data in payload.findings:
+    events = db.query(ReportEvent).filter(ReportEvent.report_id == report_id).order_by(ReportEvent.event_index).all()
+
+    analysis = run_analysis(
+        report=report,
+        events=events,
+        retriever=global_retriever,
+        db=db,
+        provider=llm_provider,
+    )
+
+    # Create Findings from AI
+    for f in analysis.ai_findings:
         finding = Finding(
             report_id=report_id,
-            kind=f_data.kind,
-            source=f_data.source,
-            description=f_data.description,
-            citations=[c.model_dump(exclude_none=True) for c in f_data.citations],
+            kind=f.kind,
+            source="ai",
+            description=f.description,
+            citations=[c.model_dump(exclude_none=True) for c in f.citations],
         )
         db.add(finding)
+
+    proposed_steps_parts = []
+    if analysis.ai_priority_reason:
+        proposed_steps_parts.append(f"Reasoning: {analysis.ai_priority_reason.description}")
+
+    if analysis.ai_questions:
+        proposed_steps_parts.append("Questions:")
+        for q in analysis.ai_questions:
+            proposed_steps_parts.append(f"- {q.description}")
+
+    if analysis.ai_steps:
+        proposed_steps_parts.append("Inspection Steps:")
+        for s in analysis.ai_steps:
+            proposed_steps_parts.append(f"- {s.description}")
+
+    proposed_steps = "\n".join(proposed_steps_parts) if proposed_steps_parts else None
 
     # Create Work Order
     work_order = WorkOrder(
         report_id=report_id,
         status="draft",
-        priority=payload.priority,
-        proposed_steps=payload.proposed_steps,
+        priority=analysis.final_priority,
+        proposed_steps=proposed_steps,
     )
     db.add(work_order)
     db.flush()
 
     append_audit_log(
         session=db,
-        actor="system",  # Created from the analysis step
+        actor="system",
         action="created",
         entity_type="work_order",
         entity_id=int(work_order.id),
@@ -344,7 +370,7 @@ def get_equipment_list(
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[dict[str, Any]]:
     equipments = db.query(Equipment).all()
-    
+
     result: list[dict[str, Any]] = []
     for eq in equipments:
         reports = (
@@ -354,7 +380,7 @@ def get_equipment_list(
             .limit(5)
             .all()
         )
-        
+
         result.append({
             "id": int(eq.id),
             "identifier": str(eq.identifier),
@@ -367,7 +393,7 @@ def get_equipment_list(
                 } for r in reports
             ]
         })
-        
+
     return result
 
 

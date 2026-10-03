@@ -8,6 +8,7 @@ class FakeLLM:
     def __init__(self, response_text: str, fail_with: Exception | None = None) -> None:
         self.response_text = response_text
         self.fail_with = fail_with
+        self.model = "fake-model"
 
     def generate_json(self, prompt: str) -> str:
         if self.fail_with:
@@ -50,6 +51,9 @@ def test_valid_ai_response() -> None:
                 "citations": [{"event_index": 1}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
 
@@ -72,7 +76,10 @@ def test_markdown_wrapper_is_stripped() -> None:
     valid_json = """```json
 {
     "findings": [],
-    "proposed_priority": 0
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
+        "proposed_priority": 0
 }
 ```"""
     provider = FakeLLM(response_text=valid_json)
@@ -80,7 +87,7 @@ def test_markdown_wrapper_is_stripped() -> None:
         provider,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
 
     assert result.status == AIStatus.OK
@@ -90,6 +97,9 @@ def test_schema_violation_extra_fields() -> None:
     # LLM hallucinates a "diagnosis" field which is strictly forbidden
     invalid_json = json.dumps({
         "findings": [],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1,
         "diagnosis": "spindle failure"
     })
@@ -98,7 +108,7 @@ def test_schema_violation_extra_fields() -> None:
         provider,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
 
     assert result.status == AIStatus.DEGRADED
@@ -114,6 +124,9 @@ def test_schema_violation_invalid_finding_kind() -> None:
                 "citations": [{"event_index": 1}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider = FakeLLM(response_text=invalid_json)
@@ -138,6 +151,9 @@ def test_schema_violation_citation_structure() -> None:
                 "citations": [{"chunk_id": "chunk-1", "event_index": 1}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider = FakeLLM(response_text=invalid_json_both)
@@ -158,6 +174,9 @@ def test_schema_violation_citation_structure() -> None:
                 "citations": [{}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider2 = FakeLLM(response_text=invalid_json_neither)
@@ -165,7 +184,7 @@ def test_schema_violation_citation_structure() -> None:
         provider2,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
     assert result2.status == AIStatus.DEGRADED
     assert result2.error_code == "SCHEMA_VIOLATION"
@@ -181,6 +200,9 @@ def test_citation_validation_missing_citations() -> None:
                 "citations": []
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider = FakeLLM(response_text=invalid_json)
@@ -188,7 +210,7 @@ def test_citation_validation_missing_citations() -> None:
         provider,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
     assert result.status == AIStatus.DEGRADED
     assert result.error_code == "CITATION_VALIDATION_FAILED"
@@ -203,6 +225,9 @@ def test_citation_validation_invalid_chunk_id() -> None:
                 "citations": [{"chunk_id": "hallucinated-chunk"}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider = FakeLLM(response_text=valid_json)
@@ -211,7 +236,7 @@ def test_citation_validation_invalid_chunk_id() -> None:
         prompt="...",
         # Chunk exists in real KB maybe, but wasn't retrieved for THIS query
         retrieved_chunk_ids={"actual-chunk-1"},
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
     assert result.status == AIStatus.DEGRADED
     assert result.error_code == "CITATION_VALIDATION_FAILED"
@@ -226,6 +251,9 @@ def test_citation_validation_invalid_event_index() -> None:
                 "citations": [{"event_index": 999}]
             }
         ],
+        "follow_up_questions": [],
+        "inspection_steps": [],
+        "priority_reason": {"description": "r", "citations": [{"event_index": 1}]},
         "proposed_priority": 1
     })
     provider = FakeLLM(response_text=valid_json)
@@ -245,7 +273,7 @@ def test_malformed_json_handled() -> None:
         provider,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
     assert result.status == AIStatus.DEGRADED
     assert result.error_code == "JSON_PARSE_ERROR"
@@ -257,7 +285,7 @@ def test_provider_exception_handled() -> None:
         provider,
         prompt="...",
         retrieved_chunk_ids=set(),
-        supplied_event_indices=set(),
+        supplied_event_indices={1},
     )
     assert result.status == AIStatus.UNAVAILABLE
     assert result.error_code == "PROVIDER_ERROR"

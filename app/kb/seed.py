@@ -11,68 +11,62 @@ def seed_db() -> None:
     # Ensure tables exist (they should, through alembic, but safe)
     Base.metadata.create_all(bind=engine)
     with Session(engine) as db:
-        # Seed Equipment
-        eq = db.execute(select(Equipment).where(Equipment.id == 1)).scalar_one_or_none()
-        if not eq:
-            eq = Equipment(id=1, identifier="M-204", type="cnc")
-            db.add(eq)
+
+        # 1. CNC Mill
+        cnc = db.execute(select(Equipment).where(Equipment.identifier == "M-204")).scalar_one_or_none()
+        if not cnc:
+            cnc = Equipment(identifier="M-204", type="cnc")
+            db.add(cnc)
             db.flush()
 
-        # Seed IssueReport
-        report = db.execute(select(IssueReport).where(IssueReport.id == 1)).scalar_one_or_none()
-        if not report:
-            report = IssueReport(
-                id=1,
-                equipment_id=1,
-                reported_by="OPERATOR",
-                description="High-pitched spindle noise starts when the spindle accelerates above 1,200 RPM. Noise was not present during idle operation this morning. Coolant level was checked and appears normal.",
-                timestamp=datetime.datetime.now(datetime.UTC)
-            )
-            db.add(report)
+        # CNC Normal
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Spindle normal operation check.")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=cnc.id, reported_by="OPERATOR", description="Spindle normal operation check.", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "All parameters normal.", "spindle_speed": 1200, "vibration": 1.2, "bearing_temperature": 50, "hydraulic_pressure": 150}))
+
+        # CNC Conflict
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Spindle high vibration but low temp (Conflict).")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=cnc.id, reported_by="OPERATOR", description="Spindle high vibration but low temp (Conflict).", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "High vibration detected but temp is surprisingly low.", "spindle_speed": 1200, "vibration": 5.5, "bearing_temperature": 25, "hydraulic_pressure": 150}))
+
+        # CNC Missing
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Spindle check with missing vibration data.")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=cnc.id, reported_by="OPERATOR", description="Spindle check with missing vibration data.", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "Speed and temp ok, sensor disconnected.", "spindle_speed": 1200, "bearing_temperature": 55}))
+
+        # 2. Pump
+        pump = db.execute(select(Equipment).where(Equipment.identifier == "P-101")).scalar_one_or_none()
+        if not pump:
+            pump = Equipment(identifier="P-101", type="pump")
+            db.add(pump)
             db.flush()
 
-        # Seed Events
-        events = [
-            ReportEvent(
-                report_id=1,
-                event_index=1,
-                readings={"event_type": "SERVICE RECORD", "message": "Scheduled maintenance completed."}
-            ),
-            ReportEvent(
-                report_id=1,
-                event_index=2,
-                readings={"event_type": "TECHNICIAN", "message": "Routine spindle inspection completed."}
-            ),
-            ReportEvent(
-                report_id=1,
-                event_index=3,
-                readings={
-                    "event_type": "TECHNICIAN",
-                    "message": "Coolant level checked \u2014 within normal range.",
-                    "coolant_temperature": 21
-                }
-            ),
-            ReportEvent(
-                report_id=1,
-                event_index=4,
-                readings={
-                    "event_type": "OPERATOR",
-                    "message": "Reported high-pitched spindle noise during rapid movement.",
-                    "spindle_speed": 1240,
-                    "vibration": 4.8,
-                    "bearing_temperature": 71,
-                    "hydraulic_pressure": 151
-                }
-            )
-        ]
+        # Pump Normal
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Pump normal operation check.")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=pump.id, reported_by="OPERATOR", description="Pump normal operation check.", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "Running smooth.", "flow_rate": 100, "pressure": 45, "vibration": 1.0}))
 
-        for e in events:
-            existing = db.execute(
-                select(ReportEvent)
-                .where(ReportEvent.report_id == e.report_id, ReportEvent.event_index == e.event_index)
-            ).scalar_one_or_none()
-            if not existing:
-                db.add(e)
+        # Pump Conflict
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Pump high flow but low pressure (Conflict).")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=pump.id, reported_by="OPERATOR", description="Pump high flow but low pressure (Conflict).", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "Flow is maxed out but pressure is dropping.", "flow_rate": 150, "pressure": 5, "vibration": 1.2}))
+
+        # Pump Missing
+        if not db.execute(select(IssueReport).where(IssueReport.description == "Pump check with missing pressure data.")).scalar_one_or_none():
+            rep = IssueReport(equipment_id=pump.id, reported_by="OPERATOR", description="Pump check with missing pressure data.", timestamp=datetime.datetime.now(datetime.UTC))
+            db.add(rep)
+            db.flush()
+            db.add(ReportEvent(report_id=rep.id, event_index=1, readings={"message": "Pressure sensor offline.", "flow_rate": 90, "vibration": 1.1}))
 
         db.commit()
 

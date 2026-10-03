@@ -23,4 +23,4 @@ COPY --from=frontend-builder /frontend/dist ./frontend/dist
 EXPOSE 8000
 # Run migrations then start the server.
 # DATABASE_URL must be provided via environment variable.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m app.kb.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

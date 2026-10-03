@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import settings
 from app.models import AuditLog
 
+assert settings.database_url is not None
 engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

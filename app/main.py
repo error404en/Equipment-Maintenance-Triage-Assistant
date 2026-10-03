@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.sql import text
 
 from app.ai import LLMProvider
 from app.analysis import run_analysis
@@ -51,9 +52,19 @@ def get_llm_provider() -> LLMProvider | None:
     # Default production behavior: No paid API configured.
     return None
 
+@app.get("/health/live")
+def health_live() -> dict[str, str]:
+    return {"status": "alive"}
+
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+def health_check(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "components": {"database": "ok"}}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Database health check failed", exc_info=e)
+        raise HTTPException(status_code=503, detail={"status": "degraded", "components": {"database": "unreachable"}})
 
 
 @app.post("/api/reports/{report_id}/analyze", response_model=AnalysisResponse)

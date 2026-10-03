@@ -13,10 +13,20 @@ export function Home({ onNewReport, onSelectReport }: { onNewReport: () => void,
   const load = () => {
     setLoading(true)
     setError(null)
-    api.getEquipment()
-      .then(setEquipment)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+    try {
+      api.getEquipment()
+        .then(data => {
+          setEquipment(data)
+          setLoading(false)
+        })
+        .catch(e => {
+          setError(e.message || 'Failed to fetch equipment')
+          setLoading(false)
+        })
+    } catch (e: any) {
+      setError(e.message || 'Failed to fetch equipment')
+      setLoading(false)
+    }
   }
 
   return (

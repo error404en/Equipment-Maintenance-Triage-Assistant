@@ -31,7 +31,7 @@ class IssueReport(Base):
     equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=False)
     reported_by = Column(String, nullable=False)
     description = Column(String, nullable=False)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC), nullable=False)
 
     equipment = relationship("Equipment")
 
@@ -95,7 +95,7 @@ class WorkOrder(Base):
 class AuditLog(Base):
     __tablename__ = "audit_log"
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC), nullable=False)
     actor = Column(String, nullable=False)
     action = Column(String, nullable=False)
     entity_type = Column(String, nullable=False)

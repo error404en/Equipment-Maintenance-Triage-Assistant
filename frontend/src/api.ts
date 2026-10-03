@@ -71,14 +71,21 @@ export interface IssueReportDetailResponse {
   events: ReportEventResponse[]
 }
 
+const getUrl = (path: string) => {
+  const base = import.meta.env.BASE_URL || '/'
+  return base.endsWith('/') ? base + path : base + '/' + path
+}
+
 export const api = {
   getEquipment: async (): Promise<EquipmentResponse[]> => {
-    const res = await fetch('/api/equipment')
+    const res = await fetch(getUrl('api/equipment'))
     if (!res.ok) throw new Error('Failed to fetch equipment')
-    return res.json()
+    const data = await res.json()
+    if (!Array.isArray(data)) throw new Error('Invalid JSON response: expected an array')
+    return data
   },
   createReport: async (data: any): Promise<{ id: number }> => {
-    const res = await fetch('/api/reports', {
+    const res = await fetch(getUrl('api/reports'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -90,12 +97,12 @@ export const api = {
     return res.json()
   },
   getReport: async (id: number): Promise<IssueReportDetailResponse> => {
-    const res = await fetch(`/api/reports/${id}`)
+    const res = await fetch(getUrl(`api/reports/${id}`))
     if (!res.ok) throw new Error('Failed to fetch report')
     return res.json()
   },
   analyzeReport: async (id: number): Promise<AnalysisData> => {
-    const res = await fetch(`/api/reports/${id}/analyze`, { method: 'POST' })
+    const res = await fetch(getUrl(`api/reports/${id}/analyze`), { method: 'POST' })
     if (!res.ok) {
       const err = await res.json()
       throw new Error(err.detail || 'Analysis failed')
@@ -103,12 +110,12 @@ export const api = {
     return res.json()
   },
   getEquipmentHistory: async (id: number): Promise<EquipmentHistoryResponse> => {
-    const res = await fetch(`/api/equipment/${id}/history`)
+    const res = await fetch(getUrl(`api/equipment/${id}/history`))
     if (!res.ok) throw new Error('Failed to fetch equipment history')
     return res.json()
   },
   createDraftWorkOrder: async (id: number): Promise<WorkOrderHistory> => {
-    const res = await fetch(`/api/reports/${id}/draft-work-order`, { method: 'POST' })
+    const res = await fetch(getUrl(`api/reports/${id}/draft-work-order`), { method: 'POST' })
     if (!res.ok) {
       const err = await res.json()
       throw new Error(err.detail || 'Failed to draft work order')
@@ -116,7 +123,7 @@ export const api = {
     return res.json()
   },
   reviewWorkOrder: async (id: number, action: 'approve'|'reject', actor: string): Promise<WorkOrderHistory> => {
-    const res = await fetch(`/api/work-orders/${id}/${action}`, {
+    const res = await fetch(getUrl(`api/work-orders/${id}/${action}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actor })

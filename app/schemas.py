@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -66,3 +66,54 @@ class EquipmentHistoryResponse(BaseModel):
     equipment_id: int
     equipment_identifier: str
     reports: list[ReportHistory]
+
+
+class ReportEventCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    timestamp: datetime | None = None
+    readings: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_numeric_readings(self) -> Self:
+        for k, v in self.readings.items():
+            if k in ["coolant_temperature", "vibration", "spindle_speed", "hydraulic_pressure", "bearing_temperature"]:
+                try:
+                    float(v)
+                except (ValueError, TypeError):
+                    raise ValueError(f"Reading {k} must be numeric, got {v}")
+        return self
+
+
+class IssueReportCreate(BaseModel):
+    equipment_type: Literal["cnc"]
+    equipment_identifier: str = Field(..., min_length=1)
+    reported_by: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1, max_length=2000)
+    events: list[ReportEventCreate] = Field(max_length=50)
+
+
+class ReportEventResponse(BaseModel):
+    event_index: int
+    readings: dict[str, Any] | None
+
+
+class IssueReportSummaryResponse(BaseModel):
+    id: int
+    timestamp: datetime
+    description: str
+
+
+class EquipmentResponse(BaseModel):
+    id: int
+    identifier: str
+    type: str
+    latest_reports: list[IssueReportSummaryResponse]
+
+
+class IssueReportDetailResponse(BaseModel):
+    id: int
+    equipment_id: int
+    reported_by: str
+    description: str
+    timestamp: datetime
+    events: list[ReportEventResponse]

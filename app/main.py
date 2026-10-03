@@ -18,6 +18,9 @@ from app.retrieval import load_knowledge_base
 from app.schemas import (
     AnalysisResponse,
     EquipmentHistoryResponse,
+    EquipmentResponse,
+    IssueReportCreate,
+    IssueReportDetailResponse,
     WorkOrderCreate,
     WorkOrderHistory,
     WorkOrderReview,
@@ -252,6 +255,121 @@ def get_equipment_history(
         equipment_identifier=str(equipment.identifier),
         reports=report_histories,
     )
+
+@app.post("/api/reports", response_model=dict)
+def create_report(
+    payload: IssueReportCreate,
+    db: Session = Depends(get_db),  # noqa: B008
+) -> dict[str, int]:
+    # Find or create equipment
+    equipment = db.query(Equipment).filter(
+        Equipment.identifier == payload.equipment_identifier,
+        Equipment.type == payload.equipment_type
+    ).first()
+
+    if not equipment:
+        equipment = Equipment(
+            identifier=payload.equipment_identifier,
+            type=payload.equipment_type
+        )
+        db.add(equipment)
+        db.flush()
+
+    report = IssueReport(
+        equipment_id=equipment.id,
+        reported_by=payload.reported_by,
+        description=payload.description,
+    )
+    db.add(report)
+    db.flush()
+
+    # Create events
+    for i, event_data in enumerate(payload.events, start=1):
+        # Merge message and timestamp into readings JSONB
+        merged_readings = event_data.readings.copy()
+        merged_readings["message"] = event_data.message
+        if event_data.timestamp:
+            merged_readings["timestamp"] = event_data.timestamp.isoformat()
+
+        report_event = ReportEvent(
+            report_id=report.id,
+            event_index=i,
+            readings=merged_readings,
+        )
+        db.add(report_event)
+
+    db.flush()
+
+    # Audit log
+    append_audit_log(
+        session=db,
+        actor=payload.reported_by,
+        action="created",
+        entity_type="issue_report",
+        entity_id=int(report.id),
+    )
+
+    db.commit()
+    return {"id": int(report.id)}
+
+
+@app.get("/api/reports/{report_id}", response_model=IssueReportDetailResponse)
+def get_report(
+    report_id: int,
+    db: Session = Depends(get_db),  # noqa: B008
+) -> dict[str, Any]:
+    report = db.query(IssueReport).filter(IssueReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    events = db.query(ReportEvent).filter(ReportEvent.report_id == report_id).order_by(ReportEvent.event_index).all()
+
+    return {
+        "id": int(report.id),
+        "equipment_id": int(report.equipment_id),
+        "reported_by": str(report.reported_by),
+        "description": str(report.description),
+        "timestamp": report.timestamp,
+        "events": [
+            {
+                "event_index": int(e.event_index),
+                "readings": e.readings
+            } for e in events
+        ]
+    }
+
+
+@app.get("/api/equipment", response_model=list[EquipmentResponse])
+def get_equipment_list(
+    db: Session = Depends(get_db),  # noqa: B008
+) -> list[dict[str, Any]]:
+    equipments = db.query(Equipment).all()
+    
+    result: list[dict[str, Any]] = []
+    for eq in equipments:
+        reports = (
+            db.query(IssueReport)
+            .filter(IssueReport.equipment_id == eq.id)
+            .order_by(IssueReport.timestamp.desc())
+            .limit(5)
+            .all()
+        )
+        
+        result.append({
+            "id": int(eq.id),
+            "identifier": str(eq.identifier),
+            "type": str(eq.type),
+            "latest_reports": [
+                {
+                    "id": int(r.id),
+                    "timestamp": r.timestamp,
+                    "description": str(r.description)
+                } for r in reports
+            ]
+        })
+        
+    return result
+
 
 # Serve the built frontend
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

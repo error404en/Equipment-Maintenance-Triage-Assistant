@@ -217,7 +217,7 @@ export function Analysis({ reportId, actorId, onBack }: { reportId: number, acto
 
           <section className="py-7">
             <SectionHeading number="03">Confirmed Findings</SectionHeading>
-            <p className="mt-4 text-xs text-[#777d74] italic">Technician-confirmed findings will appear here. (Requires full auth implementation).</p>
+            <p className="mt-4 text-xs text-[#777d74] italic">No technician-confirmed findings recorded for this report.</p>
           </section>
         </div>
 

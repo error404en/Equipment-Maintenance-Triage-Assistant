@@ -124,15 +124,15 @@ export function NewReport({ actorId, onReportCreated, onCancel }: { actorId: str
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[9px] font-bold uppercase tracking-wider text-[#777d74] mb-1">Coolant Temp</label>
-                    <input type="number" step="any" value={ev.coolant_temperature} onChange={e => { const newE = [...events]; newE[idx].coolant_temperature = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
+                    <input type="number" step="any" min="0" value={ev.coolant_temperature} onChange={e => { const newE = [...events]; newE[idx].coolant_temperature = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
                   </div>
                   <div>
                     <label className="block text-[9px] font-bold uppercase tracking-wider text-[#777d74] mb-1">Vibration</label>
-                    <input type="number" step="any" value={ev.vibration} onChange={e => { const newE = [...events]; newE[idx].vibration = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
+                    <input type="number" step="any" min="0" value={ev.vibration} onChange={e => { const newE = [...events]; newE[idx].vibration = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
                   </div>
                   <div>
                     <label className="block text-[9px] font-bold uppercase tracking-wider text-[#777d74] mb-1">Spindle Speed</label>
-                    <input type="number" step="any" value={ev.spindle_speed} onChange={e => { const newE = [...events]; newE[idx].spindle_speed = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
+                    <input type="number" step="any" min="0" value={ev.spindle_speed} onChange={e => { const newE = [...events]; newE[idx].spindle_speed = e.target.value; setEvents(newE) }} className="w-full border border-[#8f9188] bg-white p-1.5 text-xs" />
                   </div>
                 </div>
               </div>

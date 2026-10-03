@@ -81,8 +81,14 @@ def evaluate_coolant_condition(report: IssueReport, events: list[ReportEvent]) -
 
     for event in events:
         if event.readings and "coolant_temperature" in event.readings:
-            has_coolant = True
             temp_val = event.readings["coolant_temperature"]
+            try:
+                if float(temp_val) == -1.0:
+                    continue
+            except (ValueError, TypeError):
+                pass
+            
+            has_coolant = True
             evidence_list.append(Evidence(event_index=event.event_index, reading_key="coolant_temperature", value=temp_val))  # type: ignore[arg-type]
 
     if not has_coolant:

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.ai import LLMProvider
 from app.analysis import run_analysis
+from app.config import settings
 from app.db import append_audit_log, get_db
 from app.models import Equipment, Finding, IssueReport, ReportEvent, WorkOrder
 from app.retrieval import load_knowledge_base
@@ -24,11 +26,26 @@ from app.workflow import InvalidTransitionError, approve_work_order, reject_work
 
 app = FastAPI(title="Equipment Triage Assistant")
 
+# CORS — only activated when ALLOWED_ORIGINS is explicitly set.
+# In the default single-origin deploy (FastAPI serves the built frontend),
+# this middleware is NOT needed and is intentionally skipped.
+_cors_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
 # Global dependencies
 KB_DIR = Path(os.path.join(os.path.dirname(__file__), "kb"))
 global_retriever = load_knowledge_base(KB_DIR)
 
 def get_llm_provider() -> LLMProvider | None:
+    if settings.groq_api_key:
+        from app.ai import GroqLLMProvider
+        return GroqLLMProvider(api_key=settings.groq_api_key, model=settings.groq_model)
     # Default production behavior: No paid API configured.
     return None
 

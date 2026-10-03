@@ -1,4 +1,5 @@
 import json
+from unittest.mock import MagicMock
 
 from app.ai import AIStatus, generate_ai_suggestions
 
@@ -12,6 +13,27 @@ class FakeLLM:
         if self.fail_with:
             raise self.fail_with
         return self.response_text
+
+
+def test_groq_llm_provider() -> None:
+    from app.ai import GroqLLMProvider
+
+    provider = GroqLLMProvider(api_key="test_key", model="test_model")
+
+    # Mock the underlying client
+    mock_chat_completion = MagicMock()
+    mock_chat_completion.choices = [
+        MagicMock(message=MagicMock(content='{"findings": [], "proposed_priority": 1}'))
+    ]
+    # Assign MagicMock to the client attribute instead of the method to satisfy mypy
+    provider.client = MagicMock()
+    provider.client.chat.completions.create.return_value = mock_chat_completion
+
+    result = provider.generate_json("test prompt")
+
+    provider.client.chat.completions.create.assert_called_once()
+    assert result == '{"findings": [], "proposed_priority": 1}'
+
 
 
 def test_valid_ai_response() -> None:
@@ -30,7 +52,7 @@ def test_valid_ai_response() -> None:
         ],
         "proposed_priority": 1
     })
-    
+
     provider = FakeLLM(response_text=valid_json)
     result = generate_ai_suggestions(
         provider,
@@ -38,7 +60,7 @@ def test_valid_ai_response() -> None:
         retrieved_chunk_ids={"cnc-spindle"},
         supplied_event_indices={1, 2},
     )
-    
+
     assert result.status == AIStatus.OK
     assert result.error_code is None
     assert result.response is not None
@@ -60,7 +82,7 @@ def test_markdown_wrapper_is_stripped() -> None:
         retrieved_chunk_ids=set(),
         supplied_event_indices=set(),
     )
-    
+
     assert result.status == AIStatus.OK
 
 
@@ -78,7 +100,7 @@ def test_schema_violation_extra_fields() -> None:
         retrieved_chunk_ids=set(),
         supplied_event_indices=set(),
     )
-    
+
     assert result.status == AIStatus.DEGRADED
     assert result.error_code == "SCHEMA_VIOLATION"
 
@@ -101,7 +123,7 @@ def test_schema_violation_invalid_finding_kind() -> None:
         retrieved_chunk_ids=set(),
         supplied_event_indices={1},
     )
-    
+
     assert result.status == AIStatus.DEGRADED
     assert result.error_code == "SCHEMA_VIOLATION"
 

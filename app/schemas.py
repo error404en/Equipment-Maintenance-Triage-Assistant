@@ -9,6 +9,7 @@ from app.rules import RuleResult
 
 class AnalysisResponse(BaseModel):
     report_id: int
+    equipment_id: int
     rule_results: list[RuleResult]
     ai_status: AIStatus
     ai_error_code: str | None = None

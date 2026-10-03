@@ -6,13 +6,18 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=development
+      # Must point to the db service hostname, not localhost.
+      - DATABASE_URL=postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/triage
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
     volumes:
       - ./app:/app/app
-      - ./tests:/app/tests
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
     depends_on:
-      - db
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:15
@@ -20,8 +25,13 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=triage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   db_test:
     image: postgres:15
@@ -29,5 +39,5 @@ services:
       - "5433:5432"
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=triage_test

@@ -67,6 +67,7 @@ def run_analysis(
 
     return AnalysisResponse(
         report_id=int(report.id),
+        equipment_id=int(report.equipment_id),
         rule_results=rule_results,
         ai_status=ai_result.status,
         ai_error_code=ai_result.error_code,

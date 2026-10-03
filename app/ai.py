@@ -53,6 +53,34 @@ class LLMProvider(Protocol):
         ...
 
 
+class GroqLLMProvider:
+    def __init__(self, api_key: str, model: str) -> None:
+        import groq
+        self.client = groq.Groq(api_key=api_key)
+        self.model = model
+
+    def generate_json(self, prompt: str) -> str:
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an industrial equipment diagnostic assistant. "
+                        "You MUST respond ONLY with valid JSON matching this schema: "
+                        "{'findings': [{'kind': 'observation'|'possible_cause', 'description': str, 'citations': [{'chunk_id': str} | {'event_index': int}]}], 'proposed_priority': 0|1|2}. "
+                        "Do not output markdown formatting like ```json, just the raw JSON object. "
+                        "Never output 'confirmed' findings."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        return completion.choices[0].message.content or ""
+
+
 class CitationValidationError(Exception):
     pass
 
@@ -94,7 +122,10 @@ def generate_ai_suggestions(
 ) -> AIResult:
     try:
         raw_output = provider.generate_json(prompt)
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        print(f"Provider error: {e}")
         # Any provider-level exception constitutes UNAVAILABLE
         return AIResult(status=AIStatus.UNAVAILABLE, error_code="PROVIDER_ERROR")
 

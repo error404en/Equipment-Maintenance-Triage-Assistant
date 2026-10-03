@@ -45,7 +45,9 @@ def test_client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def test_analyze_report_no_provider(test_client: TestClient, db_session: Session) -> None:
+def test_analyze_report_no_provider(test_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "groq_api_key", None)
+
     # 1. Create DB objects
     eq = Equipment(identifier="EQ-001", type="cnc")
     db_session.add(eq)
